@@ -10,6 +10,17 @@ OmniLMM_ROOT = None
 Mini_Gemini_ROOT = None
 VXVERSE_ROOT = None
 LLAVA_V1_7B_MODEL_PTH = 'Please set your local path to LLaVA-7B-v1.1 here, the model weight is obtained by merging LLaVA delta weight based on vicuna-7b-v1.1 in https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md with vicuna-7b-v1.1. '
+LLAVA_LLAMA3_8B = '/code/LLaVA/checkpoints/llava-llama3-mousi-onlyclip'
+LLAVA_LLAMA3_8B_MOUSI = '/code/LLaVA/checkpoints/llava-llama3-mousi'
+LLAVA_V1_5_7B_MOUSI = '/code/LLaVA/checkpoints/llava-mousi'
+LLAVA_LLAMA3_8B_DINO = '/code/LLaVA/checkpoints/llava-llama3-dino'
+LLAVA_LLAMA3_8B_OCR = '/code/LLaVA/checkpoints/llava-llama3-ocr'
+LLAVA_LLAMA3_8B_SIGLIPL = '/code/LLaVA/checkpoints/llava-llama3-siglipL'
+LLAVA_LLAMA3_8B_MOUSI_V2 = '/code/LLaVA/checkpoints/llava-llama3-mousi-v2'
+LLAVA_LLAMA3_8B_GRAPH_PROMPT = '/code/LLaVA/checkpoints/llava-llama3-graph_prompt'
+LLAVAX_VICUNA_7B = '/code/MyLLaVA/checkpoints/llava-vicuna-v1.5-7b'
+LLAVAX_LLAMA3_1_8B = '/code/MyLLaVA/checkpoints/llava-llama3-sure'
+LLAVAX_V1_5_7B = '/code/MyLLaVA/checkpoints/llavax-0916'
 
 ungrouped = {
     'TransCore_M': partial(TransCoreM, root=TransCore_ROOT),
@@ -86,7 +97,12 @@ qwen_series = {
 }
 
 llava_series = {
-    'llava_v1.5_7b': partial(LLaVA, model_pth='liuhaotian/llava-v1.5-7b'),
+    'llava_v1.5_7b': partial(LLaVA, model_pth='/code/OldLLaVA/checkpoints/llava-v1.5-7b-random'),
+    'llava_alpha_7b': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha'),
+    'llava_alpha_2_7b': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha-2'),
+    'llava_alpha_3_7b_pretrain': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha-3-pretrain'),
+    'llava_alpha_2_7b_pretrain': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha-2-pretrain'),
+    'llava_beta_7b_pretrain': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-beta-pretrain'),
     'llava_v1.5_13b': partial(LLaVA, model_pth='liuhaotian/llava-v1.5-13b'),
     'llava_v1_7b': partial(LLaVA, model_pth=LLAVA_V1_7B_MODEL_PTH),
     'sharegpt4v_7b': partial(LLaVA, model_pth='Lin-Chen/ShareGPT4V-7B'),
@@ -95,6 +111,16 @@ llava_series = {
     'llava_next_vicuna_13b': partial(LLaVA_Next, model_pth='llava-hf/llava-v1.6-vicuna-13b-hf'),
     'llava_next_mistral_7b': partial(LLaVA_Next, model_pth='llava-hf/llava-v1.6-mistral-7b-hf'),
     'llava_next_yi_34b': partial(LLaVA_Next, model_pth='llava-hf/llava-v1.6-34b-hf'),
+    'llava_llama3_8b': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B),
+    'llava_llama3_8b_mousi': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B_MOUSI),
+    'llava_llama3_8b_dino': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B_DINO),
+    'llava_llama3_8b_ocr': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B_OCR),
+    'llava_llama3_8b_siglipl': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B_SIGLIPL),
+    'llava_llama3_8b_mousi_v2': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B_MOUSI_V2),
+    'llava_llama3_8b_graph_prompt': partial(LLaVA_Mousi, model_pth=LLAVA_LLAMA3_8B_GRAPH_PROMPT),
+    'llavax_vicuna_7b': partial(LLaVAX, model_pth=LLAVAX_VICUNA_7B),
+    'llavax_llama3_1_8b': partial(LLaVAX, model_pth=LLAVAX_LLAMA3_1_8B),
+    'llavax_v1.5_7b': partial(LLaVAX, model_pth=LLAVAX_V1_5_7B),
 }
 
 internvl_series = {

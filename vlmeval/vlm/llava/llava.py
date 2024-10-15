@@ -19,7 +19,8 @@ class LLaVA(BaseModel):
         try:
             from llava.model.builder import load_pretrained_model
             from llava.mm_utils import get_model_name_from_path
-        except:
+        except Exception as e:
+            print(e)
             warnings.warn('Please install llava before using LLaVA')
             sys.exit(-1)
 
@@ -36,12 +37,13 @@ class LLaVA(BaseModel):
         try:
             self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
                 model_path=model_pth,
-                model_base=None,
+                model_base='lmsys/vicuna-7b-v1.5',
                 model_name=model_name,
                 device='cpu',
                 device_map='cpu'
             )
-        except:
+        except Exception as e:
+            print(e)
             if 'ShareGPT4V' in model_pth:
                 import llava
                 warnings.warn(
