@@ -13,7 +13,7 @@ from transformers import (AutoModel, AutoModelForCausalLM, AutoTokenizer,
                           GenerationConfig, StoppingCriteriaList)
 
 from ..base import BaseModel
-from ...smp import cn_string, get_cache_path
+from ...smp import *
 from ...dataset import DATASET_TYPE
 
 
@@ -33,11 +33,11 @@ class LLaVA_XTuner(BaseModel):
         try:
             from peft import PeftModel
             from xtuner.utils import PROMPT_TEMPLATE, StopWordStoppingCriteria
-        except Exception:
-            warnings.warn(
+        except Exception as err:
+            logging.critical(
                 'Please install xtuner with `pip install -U xtuner` before '
                 'using LLaVA_XTuner')
-            sys.exit(-1)
+            raise err
 
         if not osp.isdir(llava_path):
             cache_path = get_cache_path(llava_path)
@@ -192,7 +192,7 @@ class LLaVA_XTuner(BaseModel):
         from xtuner.dataset.utils import expand2square
         from xtuner.model.utils import prepare_inputs_labels_for_multimodal
         from xtuner.utils import DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
-        prompt, image_path = self.message_to_promptimg(message)
+        prompt, image_path = self.message_to_promptimg(message, dataset=dataset)
         prompt = prompt.replace('<image>', '')
         image = Image.open(image_path).convert('RGB')
         image = expand2square(

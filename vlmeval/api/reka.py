@@ -38,7 +38,8 @@ class Reka_Wrapper(BaseAPI):
     def generate_inner(self, inputs, **kwargs) -> str:
         import reka
         reka.API_KEY = self.key
-        prompt, image_path = self.message_to_promptimg(inputs)
+        dataset = kwargs.pop('dataset', None)
+        prompt, image_path = self.message_to_promptimg(inputs, dataset=dataset)
         image_b64 = encode_image_file_to_base64(image_path)
 
         response = reka.chat(
@@ -49,8 +50,8 @@ class Reka_Wrapper(BaseAPI):
 
         try:
             return 0, response['text'], response
-        except:
-            return -1, self.fail_msg, response
+        except Exception as err:
+            return -1, self.fail_msg + str(err), response
 
 
 class Reka(Reka_Wrapper):

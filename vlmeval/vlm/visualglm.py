@@ -11,8 +11,10 @@ class VisualGLM(BaseModel):
     def __init__(self, model_path='THUDM/visualglm-6b', **kwargs):
         try:
             import sat
-        except:
-            warnings.warn('Please install SwissArmyTransformer to use VisualGLM')
+        except Exception as err:
+            logging.critical('Please install SwissArmyTransformer to use VisualGLM')
+            raise err
+
         assert model_path is not None
         self.model_path = model_path
 
@@ -25,7 +27,7 @@ class VisualGLM(BaseModel):
         warnings.warn(f'Following kwargs received: {self.kwargs}, will use as generation config. ')
 
     def generate_inner(self, message, dataset=None):
-        prompt, image_path = self.message_to_promptimg(message)
+        prompt, image_path = self.message_to_promptimg(message, dataset=dataset)
         output, _ = self.model.chat(
             image_path=image_path,
             tokenizer=self.tokenizer,

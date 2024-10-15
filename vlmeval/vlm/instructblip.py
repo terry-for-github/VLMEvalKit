@@ -24,9 +24,9 @@ class InstructBLIP(BaseModel):
             from lavis.models import load_preprocess
             from omegaconf import OmegaConf
             from lavis.common.registry import registry
-        except:
-            warnings.warn('Please install lavis before using InstructBLIP. ')
-            sys.exit(-1)
+        except Exception as e:
+            logging.critical('Please install lavis before using InstructBLIP. ')
+            raise e
 
         assert name in self.config_map
         cfg_path = osp.join(config_root, self.config_map[name])
@@ -49,7 +49,7 @@ class InstructBLIP(BaseModel):
         self.vis_processors = vis_processors
 
     def generate_inner(self, message, dataset=None):
-        prompt, image_path = self.message_to_promptimg(message)
+        prompt, image_path = self.message_to_promptimg(message, dataset=dataset)
         vis_processors = self.vis_processors
         raw_image = Image.open(image_path).convert('RGB')
         image_tensor = vis_processors['eval'](raw_image).unsqueeze(0).to(self.device)

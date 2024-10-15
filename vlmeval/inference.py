@@ -28,8 +28,22 @@ def infer_data_api(work_dir, model_name, dataset, index_set=None, api_nproc=4, i
 
     model = supported_VLM[model_name]() if isinstance(model_name, str) else model_name
     assert getattr(model, 'is_api', False)
+    if hasattr(model, 'set_dump_image'):
+        model.set_dump_image(dataset.dump_image)
 
-    indices = list(data['index'])
+    lt, indices = len(data), list(data['index'])
+
+    structs = []
+    for i in range(lt):
+        item = data.iloc[i]
+        if hasattr(model, 'use_custom_prompt') and model.use_custom_prompt(dataset_name):
+            assert hasattr(model, 'build_prompt')
+            struct = model.build_prompt(item, dataset=dataset_name)
+        else:
+            struct = dataset.build_prompt(item)
+        structs.append(struct)
+
+    # structs = [dataset.build_prompt(data.iloc[i]) for i in range(lt)]
 
     out_file = f'{work_dir}/{model_name}_{dataset_name}_supp.pkl'
     res = {}
@@ -99,6 +113,8 @@ def infer_data(model_name, work_dir, dataset, out_file, verbose=False, api_nproc
         res = {k: res[k] for k in data_indices}
         dump(res, out_file)
         return model_name
+    else:
+        model.set_dump_image(dataset.dump_image)
 
     for i in tqdm(range(lt)):
         idx = data.iloc[i]['index']
@@ -165,4 +181,6 @@ def infer_data_job(model, work_dir, model_name, dataset, verbose=False, api_npro
         dump(data, result_file)
         for i in range(world_size):
             os.remove(tmpl.format(i))
+    if world_size > 1:
+        dist.barrier()
     return model

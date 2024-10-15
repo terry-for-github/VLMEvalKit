@@ -80,7 +80,7 @@ def model_gen(model, text, images, need_bos=True, padding=False, beams=3, max_to
             except:
                 image = images[im_idx].convert('RGB')
             if len(images) > 1:
-                image = HD_transform(image, im_num=4, id_scale=model.id_scale)
+                image = HD_transform(image, im_num=model.hd_num // len(images), id_scale=model.id_scale)
             else:
                 image = HD_transform(
                     image, im_num=model.hd_num, id_scale=model.id_scale)
@@ -131,7 +131,7 @@ class XComposer2d5(BaseModel):
         self.model.hd_num = 36
         self.model.id_scale = self.id_scale
 
-    def message_to_promptimg(self, message):
+    def message_to_promptimg(self, message, dataset=None):
         num_images = len([x for x in message if x['type'] == 'image'])
         if num_images == 0:
             prompt = '\n'.join([x['value']
@@ -160,8 +160,11 @@ class XComposer2d5(BaseModel):
                 im_prompt = ' '.join(im_prompt)
                 for i in range(len(image)):
                     prompt = prompt.replace(f'<image {i+1}>', f'Image{i+1} ')
-                prompt = im_prompt + prompt
-                print(prompt)
+                if listinstr(['mmlongbench', 'dude', 'slidevqa'], dataset.lower()):     # fix bug for multi-image prompt
+                    prompt = '[UNUSED_TOKEN_146]user\n' + im_prompt + re.sub(
+                        re.escape('[UNUSED_TOKEN_146]user\n'), '', prompt
+                    )
+                    prompt = re.sub('Image1$', '', prompt)
         return prompt, image
 
     def generate_mme(self, image_path, text):
@@ -199,8 +202,13 @@ class XComposer2d5(BaseModel):
                         need_bos=True, max_token=10)
         return out
 
+    def set_max_num(self, dataset):
+        if listinstr(['MME-RealWorld', 'MME-RealWorld-CN'], dataset):
+            self.model.hd_num = 25
+
     def generate_inner(self, message, dataset=None):
-        prompt, image_path = self.message_to_promptimg(message)
+        self.set_max_num(dataset)
+        prompt, image_path = self.message_to_promptimg(message, dataset=dataset)
 
         with torch.cuda.amp.autocast():
             if dataset is None:
@@ -213,6 +221,8 @@ class XComposer2d5(BaseModel):
             elif listinstr(['llava', 'mmvet'], dataset.lower()):
                 return self.generate_vanilla(image_path, prompt)
             elif dataset is not None and DATASET_TYPE(dataset) == 'MCQ':
+                return self.generate_multichoice(image_path, prompt, dataset)
+            elif listinstr(['MME-RealWorld', 'MME-RealWorld-CN'], dataset):
                 return self.generate_multichoice(image_path, prompt, dataset)
             elif dataset is not None and DATASET_TYPE(dataset) == 'VQA':
                 return self.generate_vqa(image_path, prompt)
@@ -269,7 +279,9 @@ class XComposer2d5(BaseModel):
                 prompt = '[UNUSED_TOKEN_146]system\n{}[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]user\n{}\
                          Answer this question in detail.[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]\
                          assistant\n'.format(meta_instruction, q)
-
+            elif listinstr(['mmlongbench_doc', 'dude', 'slidevqa'], dataset.lower()):
+                q = line['question']
+                prompt = f'[UNUSED_TOKEN_146]user\n{q}[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n'
             else:
                 q = line['question']
                 prompt = f'[UNUSED_TOKEN_146]user\nAnswer the question using a single word or phrase.\

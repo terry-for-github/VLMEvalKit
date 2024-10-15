@@ -2,6 +2,7 @@ import pandas as pd
 from ...utils import can_infer, track_progress_rich
 from ...smp import *
 import numpy as np
+import re
 
 MMB_abbrs = {
     'coarse_perception': 'CP',
@@ -170,6 +171,40 @@ def build_prompt(question, options, prediction):
     return tmpl.format(question, options, prediction)
 
 
+def build_prompt_blink(question, options, prediction):
+    tmpl = (
+        'You are an AI assistant who will help me to match an answer with several options of a single-choice question. '
+        'You are provided with a question, several options, and an answer, '
+        'and you need to find which option is most similar to the answer. '
+        "If the answer says things like refuse to answer, I'm sorry cannot help, etc., output Z."
+        'If the meaning of all options are significantly different from the answer, '
+        'or the answer does not select any option, output Z. '
+        'Your should output one of the choices, A, B, C, D (if they are valid options), or Z.\n'
+        'Example 1: \n'
+        'Question: Which point is closer to the camera?\nSelect from the following choices.\n'
+        'Options: A. Point A\nB. Point B\n(Z) Failed\n'
+        'Answer: Point B, where the child is sitting, is closer to the camera.\nYour output: (B)\n'
+        'Example 2: \n'
+        'Question: Which point is closer to the camera?\nSelect from the following choices.\n'
+        'Options: (A) Point A\n(B) Point B\n(Z) Failed\n'
+        "Answer: I'm sorry, but I can't assist with that request.\nYour output: (Z)\n"
+        'Example 3: \n'
+        'Question: Which point is corresponding to the reference point?\nSelect from the following choices.\n'
+        'Options: (A) Point A\n(B) Point B\n(Z) Failed\n'
+        'Answer:The reference point (REF) on the first image is at the tip of the pot, '
+        'which is the part used to Poke if the pots were used for that action. Looking at the second image, '
+        'we need to find the part of the object that would correspond to poking.\n'
+        "(A) Point A is at the tip of the spoon's handle, which is not used for poking.\n"
+        '(B) Point B is at the bottom of the spoon, which is not used for poking.\n'
+        '(C) Point C is on the side of the pspoonot, which is not used for poking.\n'
+        '(D) Point D is at the tip of the spoon, which is not used for poking.\n'
+        '\nTherefore, there is no correct answer in the choices\nYour output: (Z)\n'
+        'Example 4: \n'
+        'Question: {}?\nOptions: {}\n(Z) Failed\nAnswer: {}\nYour output: '
+    )
+    return tmpl.format(question, options, prediction)
+
+
 def build_prompt_cn(question, options, prediction):
     tmpl = (
         '你是一个帮助我匹配答案与单选题中多个选项的 AI 助手。'
@@ -199,13 +234,15 @@ def prefetch_answer(item):
     return can_infer(item['prediction'], choices)
 
 
-def extract_answer_from_item(model, item):
+def extract_answer_from_item(model, item, dataset_name=None):
     logger = get_logger('Evaluation')
     # It will return: (pred, raw, llm_time)
     choices = build_choices(item)
     option_str = build_option_str(choices)
 
-    if cn_string(item['question']):
+    if dataset_name == 'BLINK':
+        prompt = build_prompt_blink(item['question'], option_str, item['prediction'])
+    elif cn_string(item['question']):
         prompt = build_prompt_cn(item['question'], option_str, item['prediction'])
     else:
         prompt = build_prompt(item['question'], option_str, item['prediction'])
@@ -214,6 +251,8 @@ def extract_answer_from_item(model, item):
     ret = can_infer(item['prediction'], choices)
     if ret:
         return dict(opt=ret, log=item['prediction'])
+    if model is None:
+        return dict(opt='Z', log='Failed in Prefetch, no GPT-based answer matching under `exact_matching` policy.')
 
     while retry:
         ans = model.generate(prompt)
@@ -233,13 +272,12 @@ def extract_answer_from_item(model, item):
 
 
 # For Circular Evaluation
-def prefetch_sub_data(sub_data, answer_map, verbose=False):
+def prefetch_circular_group(sub_data, verbose=False):
     lt = len(sub_data)
     GT, PRED = [], []
     for i in range(lt):
         item = sub_data.iloc[i]
-        idx = item['index']
-        GT.append(answer_map[idx])
+        GT.append(item['GT'])
         PRED.append(prefetch_answer(item))
         if PRED[-1] and (GT[-1] != PRED[-1]):
             log = (
@@ -256,9 +294,18 @@ def prefetch_sub_data(sub_data, answer_map, verbose=False):
     return ret if len(ret) > 1 else ret[0]
 
 
+def eval_vanilla(model, item, dataset_name=None):
+    res = extract_answer_from_item(model, item, dataset_name=dataset_name)
+    opt, match_log = res['opt'], res['log']
+    if opt == item['GT']:
+        return dict(hit=1, log=f'Match Log: {match_log}. ')
+    else:
+        return dict(hit=0, log=f'Match Log: {match_log}. ')
+
+
 # For Circular Evaluation
-def eval_sub_data(model, sub_data, answer_map):
-    res, GT, PRED = prefetch_sub_data(sub_data, answer_map, verbose=True)
+def eval_circular_group(model, sub_data, dataset_name=None):
+    res, GT, PRED = prefetch_circular_group(sub_data, verbose=True)
     if res is not None:
         return res
 
@@ -268,7 +315,7 @@ def eval_sub_data(model, sub_data, answer_map):
         if PRED[i]:
             log += f'Rolling {i} Matched.\n'
         else:
-            res = extract_answer_from_item(model, sub_data.iloc[i])
+            res = extract_answer_from_item(model, sub_data.iloc[i], dataset_name=dataset_name)
             opt, match_log = res['opt'], res['log']
             PRED[i] = opt
             if PRED[i] != GT[i]:
@@ -286,42 +333,199 @@ def eval_sub_data(model, sub_data, answer_map):
     return dict(hit=1, log=log)
 
 
-# For Circular Evaluation
-def eval_data_groups(model, data_groups, answer_map, result_file, nproc=16):
-    result = load(result_file) if osp.exists(result_file) else {}
-    prefetched = [prefetch_sub_data(g, answer_map, verbose=False) for g in data_groups]
-    remain = []
-    for dg, pf in zip(data_groups, prefetched):
-        if pf:
-            result[dg.iloc[0]['index'] % 1e6] = pf
-        else:
-            remain.append(dg)
-    dump(result, result_file)
-    tups = [(model, x, answer_map) for x in remain]
-    keys = [x.iloc[0]['index'] % 1e6 for x in remain]
-    if len(tups) == 0:
-        return
+# data, meta are pd.DataFrame, result_file is a path
+def mcq_vanilla_eval(model, data, meta, nproc, result_file, dataset_name=None):
+    result = {}
+    if osp.exists(result_file):
+        result = load(result_file)
+    answer_map = {i: c for i, c in zip(meta['index'], meta['answer'])}
 
-    if model is None:
-        logger = get_logger('Evaluation')
-        logger.warning('Exact Matching mode, will not do GPT-based answer matching. ')
-        for k in keys:
-            result[k] = dict(
-                hit=0, log='Failed in Prefetch, no GPT-based answer matching under `exact_matching` policy.')
+    if 'MMMU' in dataset_name:
+        data = MMMU_preproc(data)
+        answer_map = {k: (v if v in list(string.ascii_uppercase) else 'A') for k, v in answer_map.items()}
+
+    data = data[data['index'].isin(answer_map)]
+    data['GT'] = [answer_map[idx] for idx in data['index']]
+    items = []
+
+    for i in range(len(data)):
+        # Dealing with the normal part
+        item = data.iloc[i]
+        if item['index'] not in result:
+            items.append(item)
+
+    tups = [dict(model=model, item=x, dataset_name=dataset_name) for x in items]
+    keys = [x['index'] for x in items]
+    if len(tups):
+        res = track_progress_rich(eval_vanilla, tups, nproc=nproc, chunksize=nproc, save=result_file, keys=keys)
+        result = load(result_file)
+        for k, v in zip(keys, res):
+            if k not in result:
+                result[k] = v
+    data['hit'] = [result[i]['hit'] for i in data['index']]
+    data['log'] = [result[i]['log'] for i in data['index']]
+    if 'GT' in data:
+        data.pop('GT')
+    return data
+
+
+# data, meta are pd.DataFrame, result_file is a path
+def mcq_circular_eval(model, data, meta, nproc, result_file, dataset_name=None):
+    result = {}
+    if osp.exists(result_file):
+        result = load(result_file)
+    # Build Answer Map
+    answer_map = {i: c for i, c in zip(meta['index'], meta['answer'])}
+
+    for idx in list(meta['index']) + list(data['index']):
+        assert istype(idx, int)
+
+    # Only keep those lines in the meta data
+    data = data[data['index'].isin(answer_map)]
+    data['GT'] = [answer_map[idx] for idx in data['index']]
+    data_main = data[data['index'] < int(1e6)]
+
+    data_groups = []
+    for i in range(len(data_main)):
+        # Dealing with the normal part
+        idx = data_main.iloc[i]['index']
+        if idx not in result:
+            sub_data = data[data['index'] % int(1e6) == idx]
+            data_groups.append(sub_data)
+
+    if len(data_groups):
+        prefetched = [prefetch_circular_group(g, verbose=False) for g in data_groups]
+        remain = []
+        for dg, pf in zip(data_groups, prefetched):
+            if pf is not None:
+                result[dg.iloc[0]['index'] % 1e6] = pf
+            else:
+                remain.append(dg)
         dump(result, result_file)
-        return
 
-    res = track_progress_rich(
-        eval_sub_data,
-        tups,
-        nproc=nproc,
-        chunksize=nproc,
-        save=result_file,
-        keys=keys)
-    result = load(result_file)
-    for k, v in zip(keys, res):
-        if k in result:
-            assert result[k]['hit'] == v['hit'] and result[k]['log'] == v['log']
+        tups = [dict(model=model, sub_data=x, dataset_name=dataset_name) for x in remain]
+        keys = [x.iloc[0]['index'] % 1e6 for x in remain]
+
+        if len(tups) == 0:
+            pass
+        elif model is None:
+            logger = get_logger('Evaluation')
+            logger.warning('Exact Matching mode, will not do GPT-based answer matching. ')
+            for k in keys:
+                result[k] = dict(
+                    hit=0, log='Failed in Prefetch, no GPT-based answer matching under `exact_matching` policy.')
         else:
-            result[k] = v
-    dump(result, result_file)
+            res = track_progress_rich(
+                eval_circular_group,
+                tups,
+                nproc=nproc,
+                chunksize=nproc,
+                save=result_file,
+                keys=keys)
+            result = load(result_file)
+            for k, v in zip(keys, res):
+                if k not in result:
+                    result[k] = v
+
+    tmp_pth = f'/tmp/{timestr()}.xlsx'
+    dump(data_main, tmp_pth)
+    data_main = load(tmp_pth)
+    indices = data_main['index']
+    data_main['hit'] = [result[i]['hit'] for i in indices]
+    data_main['log'] = [result[i]['log'] for i in indices]
+    if 'GT' in data_main:
+        data_main.pop('GT')
+
+    return data_main
+
+
+def extract_characters_regex(s, choices=['(A)', '(B)', '(C)', '(D)', '(E)']):
+    if type(s) is dict:
+        s = ''
+    s = s.strip()
+    answer_prefixes = [
+        'The best answer is',
+        'The correct answer is',
+        'The answer is',
+        'The answer',
+        'The best option is'
+        'The correct option is',
+        'Best answer:'
+        'Best option:',
+    ]
+    for answer_prefix in answer_prefixes:
+        s = s.replace(answer_prefix, '')
+
+    if len(s.split()) > 10 and not re.search('[ABCDE]', s):
+        return ''
+    matches = re.search(r'[ABCDE]', s)
+    if matches is None:
+        for choice in choices:
+            if s.lower() in choice.lower():
+                return choice[1]
+        return ''
+    return matches[0]
+
+
+def get_dimension_rating(data_path):
+    TASKS = [
+        'Reasoning',
+        'Perception',
+    ]
+
+    SUBTASKS = [
+        'Monitoring',
+        'Autonomous_Driving',
+        'OCR with Complex Context',
+        'Diagram and Table',
+        'Remote Sensing',
+    ]
+    data = load(data_path)
+    results = {}
+    results['Overall'] = {}
+    for task in TASKS:
+        results[f'{task}'] = {}
+        for subtask in SUBTASKS:
+            results[f'{task}'][f'{subtask}'] = {}
+
+    for i in range(len(data)):
+        question = data.iloc[i]
+        Task = question['category'].split('/')[0]
+        Subtask = question['category'].split('/')[1]
+        Category = question['l2-category'].lower()
+        if 'attribute' in Category.lower():
+            Category = Category.split('/')[0] + '/attribute'
+        if question['score'] >= 0:
+            cnt = question['score']
+            if Category not in results[Task][Subtask].keys():
+                results[Task][Subtask][f'{Category}'] = {'true': cnt, 'false': 1 - cnt}
+            else:
+                results[Task][Subtask][f'{Category}']['true'] += cnt
+                results[Task][Subtask][f'{Category}']['false'] += 1 - cnt
+
+    sum_all, succ_all = 0, 0
+    for task, tasks_values in results.items():
+        cnt_task, sum_task = 0, 0
+        for substask, subtask_value in tasks_values.items():
+            cnt_subtask, sum_subtask = 0, 0
+            for category, category_dict in subtask_value.items():
+                cnt_subtask += category_dict['true']
+                sum_subtask += category_dict['false'] + category_dict['true']
+                acc = category_dict['true'] / (category_dict['false'] + category_dict['true'])
+                results[task][substask][category] = acc
+            if sum_subtask == 0:
+                acc_subtasks = 0
+            else:
+                acc_subtasks = cnt_subtask / sum_subtask
+            cnt_task += cnt_subtask
+            sum_task += sum_subtask
+            results[task][substask]['Avg'] = acc_subtasks
+        if sum_task == 0:
+            acc_task = 0
+        else:
+            acc_task = cnt_task / sum_task
+        succ_all += cnt_task
+        sum_all += sum_task
+        results[task]['Avg'] = acc_task
+    results['Overall'] = succ_all / sum_all
+    return results

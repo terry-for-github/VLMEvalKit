@@ -11,10 +11,11 @@ class VideoBaseDataset:
                  pack=False):
         try:
             import decord
-        except:
-            warnings.warn('Please install decord via `pip install decord`.')
+        except Exception as e:
+            logging.critical(e)
+            logging.critical('Please install decord via `pip install decord`.')
 
-        assert dataset in ['MMBench-Video']
+        self.dataset_name = dataset
         ret = self.prepare_dataset(dataset)
         assert ret is not None
         lmu_root = LMUDataRoot()
@@ -61,13 +62,14 @@ class VideoBaseDataset:
         images = [vid[i].asnumpy() for i in indices]
         images = [Image.fromarray(arr) for arr in images]
         for im, pth in zip(images, frame_paths):
-            im.save(pth)
+            if not osp.exists(pth):
+                im.save(pth)
         return frame_paths
 
     # Return a list of dataset names that are supported by this class, can override
     @classmethod
     def supported_datasets(cls):
-        return ['MMBench-Video']
+        return ['MMBench-Video', 'Video-MME', 'MVBench', 'MVBench_MP4']
 
     # Given the prediction file, return the evaluation results in the format of a dictionary or pandas dataframe
     @abstractmethod

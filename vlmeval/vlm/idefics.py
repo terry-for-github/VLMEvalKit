@@ -12,15 +12,15 @@ class IDEFICS(BaseModel):
     INSTALL_REQ = False
     INTERLEAVE = True
 
-    def __init__(self, model_pth='HuggingFaceM4/idefics-9b-instruct', **kwargs):
-        assert osp.exists(model_pth) or splitlen(model_pth) == 2
+    def __init__(self, model_path='HuggingFaceM4/idefics-9b-instruct', **kwargs):
+        assert osp.exists(model_path) or splitlen(model_path) == 2
         from transformers import IdeficsForVisionText2Text, AutoProcessor
 
         self.model = IdeficsForVisionText2Text.from_pretrained(
-            model_pth, torch_dtype=torch.bfloat16, device_map='auto'
+            model_path, torch_dtype=torch.bfloat16, device_map='auto'
         )
-        self.processor = AutoProcessor.from_pretrained(model_pth)
-        kwargs_default = {'max_length': 512}
+        self.processor = AutoProcessor.from_pretrained(model_path)
+        kwargs_default = {'max_new_tokens': 512}
         kwargs_default.update(kwargs)
         self.kwargs = kwargs_default
         self.file_root = osp.dirname(__file__)
@@ -31,7 +31,7 @@ class IDEFICS(BaseModel):
     def generate_inner(self, message, dataset=None):
         prompts = (
             ['Users:']
-            + [x['value'] if x['type'] == 'text' else Image.open(x['value']) for x in message]
+            + [msg['value'] if msg['type'] == 'text' else Image.open(msg['value']) for msg in message]
             + ['<end_of_utterance>', '\nAssistant: ']
         )
         inputs = self.processor(
@@ -64,14 +64,18 @@ class IDEFICS2(BaseModel):
     def __init__(self, model_path='HuggingFaceM4/idefics2-8b', **kwargs):
         assert model_path is not None
         self.model_path = model_path
+        if 'Idefics3' in self.model_path.lower():
+            warnings.warn('Install transfomers from source: PR https://github.com/open-compass/VLMEvalKit/pull/379')
+            warnings.warn('Reference: https://huggingface.co/HuggingFaceM4/Idefics3-8B-Llama3')
         self.processor = AutoProcessor.from_pretrained(model_path)
-        self.model = AutoModelForVision2Seq.from_pretrained(
+        model = AutoModelForVision2Seq.from_pretrained(
             model_path,
             torch_dtype=torch.bfloat16,
             _attn_implementation='flash_attention_2',
-            device_map='cuda',
-        )
-        kwargs_default = {'max_new_tokens': 512}
+            device_map='cpu')
+        self.model = model.to('cuda')
+
+        kwargs_default = {'max_new_tokens': 1024}
         kwargs_default.update(kwargs)
         self.kwargs = kwargs_default
         warnings.warn(
@@ -122,6 +126,23 @@ class IDEFICS2(BaseModel):
         prompt += '<end_of_utterance>\nAssistant: Answer:'
         return prompt, images
 
+    def build_prompt_mt(self, message):
+        prompt, images = '', []
+        for msg in message:
+            if msg['role'] == 'user':
+                prompt += 'User: '
+            elif msg['role'] == 'assistant':
+                prompt += 'Assistant: '
+            for item in msg['content']:
+                if item['type'] == 'image':
+                    img = load_image(item['value'])
+                    images.append(img)
+                    prompt += '<image>'
+                elif item['type'] == 'text':
+                    prompt += item['value'].strip()
+                prompt += '<end_of_utterance>\n'
+        return prompt + 'Assistant: '
+
     def build_prompt_mmbench(self, message):
         replace_mapping = {
             '\nOptions:': '\nChoices:',
@@ -139,7 +160,7 @@ class IDEFICS2(BaseModel):
                 for k, v in replace_mapping.items():
                     instruction = instruction.replace(k, v)
                 # Swap hint and question
-                if 'Hint:' in instruction:
+                if instruction.startswith('Hint:'):
                     hint, question = instruction.split('\nQuestion:')
                     question, choices = question.split('\nChoices:')
                     instruction = (
@@ -204,19 +225,32 @@ class IDEFICS2(BaseModel):
                 for k, v in replace_mapping.items():
                     instruction = instruction.replace(k, v)
                 prompt += instruction.strip()
+        if 'A.' in prompt and 'B.' in prompt:
+            prompt += '\nAnswer with the letter.'
         prompt += '<end_of_utterance>\nAssistant:'
         if 'A.' in prompt and 'B.' in prompt:
             prompt += ' Answer:'
         return prompt, images
 
+    def chat_inner(self, message, dataset=None):
+        formatted_messages, formatted_images = self.build_prompt_mt(message)
+        inputs = self._process(formatted_messages, formatted_images)
+
+        generated_ids = self.model.generate(**inputs, **self.kwargs)
+        generated_text = self.processor.batch_decode(
+            generated_ids[:, inputs['input_ids'].size(1):], skip_special_tokens=True
+        )[0]
+        response = generated_text.strip()
+        # print(dataset, " | ", formatted_messages.replace("\n", "\\n"), " | ", response.replace("\n", "\\n"))
+        return response
+
     def generate_inner(self, message, dataset=None):
         if dataset in [
-            'MMBench_DEV_EN',
-            'MMBench_TEST_EN',
-            'MMBench_DEV_CN',
-            'MMBench_TEST_CN',
-            'MMBench',
-            'MMBench_CN',
+            'MMBench_DEV_EN', 'MMBench_DEV_EN_V11',
+            'MMBench_TEST_EN', 'MMBench_TEST_EN_V11',
+            'MMBench_DEV_CN', 'MMBench_DEV_CN_V11',
+            'MMBench_TEST_CN', 'MMBench_TEST_CN_V11',
+            'MMBench', 'MMBench_V11', 'MMBench_CN', 'MMBench_CN_V11'
         ]:
             formatted_messages, formatted_images = self.build_prompt_mmbench(message)
         elif dataset in ['MMMU_DEV_VAL', 'MMMU_TEST']:

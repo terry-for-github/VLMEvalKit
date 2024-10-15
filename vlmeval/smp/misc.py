@@ -11,14 +11,12 @@ import requests
 import shutil
 import subprocess
 import warnings
-import logging
 import pandas as pd
 from collections import OrderedDict, defaultdict
 from multiprocessing import Pool, current_process
 from tqdm import tqdm
 import datetime
 import matplotlib.pyplot as plt
-import seaborn as sns
 from tabulate import tabulate
 from json import JSONDecoder
 from huggingface_hub import scan_cache_dir
@@ -72,7 +70,7 @@ def bincount(lst):
         bins[item] += 1
     return bins
 
-def get_cache_path(repo_id):
+def get_cache_path(repo_id, branch=None):
     hf_cache_info = scan_cache_dir()
     repos = list(hf_cache_info.repos)
     repo = None
@@ -83,6 +81,8 @@ def get_cache_path(repo_id):
     if repo is None:
         return None
     revs = list(repo.revisions)
+    if branch is not None:
+        revs = [r for r in revs if r.refs == frozenset({branch})]
     rev2keep, last_modified = None, 0
     for rev in revs:
         if rev.last_modified > last_modified:
@@ -151,17 +151,21 @@ def run_command(cmd):
     return subprocess.check_output(cmd).decode()
 
 def load_env():
-    logger = logging.getLogger('LOAD_ENV')
+    import logging
+    logging.basicConfig(
+        format='[%(asctime)s] %(levelname)s - %(filename)s: %(funcName)s - %(lineno)d: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S')
+
     try:
         import vlmeval
     except ImportError:
-        logger.error('VLMEval is not installed. Failed to import environment variables from .env file. ')
+        logging.error('VLMEval is not installed. Failed to import environment variables from .env file. ')
         return
     pth = osp.realpath(vlmeval.__path__[0])
     pth = osp.join(pth, '../.env')
     pth = osp.realpath(pth)
     if not osp.exists(pth):
-        logger.error(f'Did not detect the .env file at {pth}, failed to load. ')
+        logging.error(f'Did not detect the .env file at {pth}, failed to load. ')
         return
 
     from dotenv import dotenv_values
@@ -169,7 +173,7 @@ def load_env():
     for k, v in values.items():
         if v is not None and len(v):
             os.environ[k] = v
-    logger.info(f'API Keys successfully loaded from {pth}')
+    print(f'API Keys successfully loaded from {pth}')
 
 def pip_install_robust(package):
     import sys
