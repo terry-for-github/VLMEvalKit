@@ -25,6 +25,7 @@ LLAVA_LLAMA3_8B_GRAPH_PROMPT = '/code/LLaVA/checkpoints/llava-llama3-graph_promp
 LLAVAX_VICUNA_7B = '/code/MyLLaVA/checkpoints/llava-vicuna-v1.5-7b'
 LLAVAX_LLAMA3_1_8B = '/code/MyLLaVA/checkpoints/llava-llama3-sure'
 LLAVAX_V1_5_7B = '/code/MyLLaVA/checkpoints/llavax-0916'
+LLaVA_QWEN25_3B = '/code/QwenLLaVA/ckpts/llava-qwen25-3b'
 
 video_models = {
     'Video-LLaVA-7B':partial(VideoLLaVA, model_path='LanguageBind/Video-LLaVA-7B'),
@@ -131,12 +132,7 @@ qwen_series = {
 }
 
 llava_series = {
-    'llava_v1.5_7b': partial(LLaVA, model_path='/code/OldLLaVA/checkpoints/llava-v1.5-7b-random'),
-    'llava_alpha_7b': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha'),
-    'llava_alpha_2_7b': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha-2'),
-    'llava_alpha_3_7b_pretrain': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha-3-pretrain'),
-    'llava_alpha_2_7b_pretrain': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha-2-pretrain'),
-    'llava_beta_7b_pretrain': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-beta-pretrain'),
+    'llava_v1.5_7b': partial(LLaVA, model_path='liuhaotian/llava-v1.5-7b'),
     'llava_v1.5_13b': partial(LLaVA, model_path='liuhaotian/llava-v1.5-13b'),
     'llava_v1_7b': partial(LLaVA, model_path=LLAVA_V1_7B_MODEL_PTH),
     'sharegpt4v_7b': partial(LLaVA, model_path='Lin-Chen/ShareGPT4V-7B'),
@@ -157,6 +153,11 @@ llava_series = {
     'llava_onevision_qwen2_0.5b_ov': partial(LLaVA_OneVision, model_path='lmms-lab/llava-onevision-qwen2-0.5b-ov'),
     'llava_onevision_qwen2_7b_ov': partial(LLaVA_OneVision, model_path='lmms-lab/llava-onevision-qwen2-7b-ov'),
     'llava_onevision_qwen2_72b_ov': partial(LLaVA_OneVision, model_path='lmms-lab/llava-onevision-qwen2-72b-ov'),
+    'llava_alpha_7b': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha'),
+    'llava_alpha_2_7b': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha-2'),
+    'llava_alpha_3_7b_pretrain': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha-3-pretrain'),
+    'llava_alpha_2_7b_pretrain': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-alpha-2-pretrain'),
+    'llava_beta_7b_pretrain': partial(LLaVA, model_path='/code/LLaVA/checkpoints/llava-beta-pretrain'),
     'llava_llama3_8b': partial(LLaVA_Mousi, model_path=LLAVA_LLAMA3_8B),
     'llava_llama3_8b_mousi': partial(LLaVA_Mousi, model_path=LLAVA_LLAMA3_8B_MOUSI),
     'llava_llama3_8b_dino': partial(LLaVA_Mousi, model_path=LLAVA_LLAMA3_8B_DINO),
@@ -167,6 +168,7 @@ llava_series = {
     'llavax_vicuna_7b': partial(LLaVAX, model_path=LLAVAX_VICUNA_7B),
     'llavax_llama3_1_8b': partial(LLaVAX, model_path=LLAVAX_LLAMA3_1_8B),
     'llavax_v1.5_7b': partial(LLaVAX, model_path=LLAVAX_V1_5_7B),
+    'llava_qwen25_3b': partial(LLaVAQwen, model_path=LLaVA_QWEN25_3B)
 }
 
 internvl_series = {
