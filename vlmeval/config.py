@@ -98,7 +98,7 @@ qwen_series = {
 }
 
 llava_series = {
-    'llava_v1.5_7b': partial(LLaVA, model_pth='/code/OldLLaVA/checkpoints/llava-v1.5-7b-random'),
+    'llava_v1.5_7b': partial(LLaVA, model_pth='liuhaotian/llava-v1.5-7b'),
     'llava_alpha_7b': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha'),
     'llava_alpha_2_7b': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha-2'),
     'llava_alpha_3_7b_pretrain': partial(LLaVA, model_pth='/code/LLaVA/checkpoints/llava-alpha-3-pretrain'),

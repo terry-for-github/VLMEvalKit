@@ -37,7 +37,7 @@ class LLaVA(BaseModel):
         try:
             self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
                 model_path=model_pth,
-                model_base='lmsys/vicuna-7b-v1.5',
+                model_base=None,
                 model_name=model_name,
                 device='cpu',
                 device_map='cpu'
