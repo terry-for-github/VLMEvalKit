@@ -21,6 +21,7 @@ LLAVA_LLAMA3_8B_GRAPH_PROMPT = '/code/LLaVA/checkpoints/llava-llama3-graph_promp
 LLAVAX_VICUNA_7B = '/code/MyLLaVA/checkpoints/llava-vicuna-v1.5-7b'
 LLAVAX_LLAMA3_1_8B = '/code/MyLLaVA/checkpoints/llava-llama3-sure'
 LLAVAX_V1_5_7B = '/code/MyLLaVA/checkpoints/llavax-0916'
+LLaVA_QWEN25_3B = '/code/QwenLLaVA/ckpts/llava-qwen25-3b'
 
 ungrouped = {
     'TransCore_M': partial(TransCoreM, root=TransCore_ROOT),
@@ -121,6 +122,7 @@ llava_series = {
     'llavax_vicuna_7b': partial(LLaVAX, model_pth=LLAVAX_VICUNA_7B),
     'llavax_llama3_1_8b': partial(LLaVAX, model_pth=LLAVAX_LLAMA3_1_8B),
     'llavax_v1.5_7b': partial(LLaVAX, model_pth=LLAVAX_V1_5_7B),
+    'llava_qwen25_3b': partial(LLaVAQwen, model_path=LLaVA_QWEN25_3B)
 }
 
 internvl_series = {
