@@ -37,7 +37,7 @@ class LLaVA(BaseModel):
         try:
             self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
                 model_path=model_pth,
-                model_base='lmsys/vicuna-7b-v1.5',
+                model_base=None,
                 model_name=model_name,
                 device='cpu',
                 device_map='cpu'
@@ -57,10 +57,10 @@ class LLaVA(BaseModel):
         self.model = self.model.cuda()
         self.conv_mode = 'llava_v1'
 
-        kwargs_default = dict(do_sample=False, max_new_tokens=512, num_beams=1, use_cache=True) # noqa E501
+        kwargs_default = dict(do_sample=False, temperature=0, max_new_tokens=10, top_p=None, num_beams=1, use_cache=True) # noqa E501
         kwargs_default.update(kwargs)
         self.kwargs = kwargs_default
-        # warnings.warn(f'Following kwargs received: {self.kwargs}, will use as generation config. ')
+        warnings.warn(f'Following kwargs received: {self.kwargs}, will use as generation config. ')
 
     def use_custom_prompt(self, dataset):
         assert dataset is not None
@@ -99,16 +99,6 @@ class LLaVA(BaseModel):
         message.append(dict(type='text', value=prompt))
         return message
 
-    def concat_tilist(self, message):
-        text, images = '', []
-        for item in message:
-            if item['type'] == 'text':
-                text += item['value']
-            elif item['type'] == 'image':
-                text += '<image>\n'
-                images.append(item['value'])
-        return text, images
-
     def generate_inner(self, message, dataset=None):
         from llava.mm_utils import process_images, tokenizer_image_token, KeywordsStoppingCriteria
         from llava.constants import (
@@ -135,21 +125,27 @@ class LLaVA(BaseModel):
         images = [Image.open(s).convert('RGB') for s in images]
         args = abstractproperty()
         args.image_aspect_ratio = 'pad'
-        image_tensor = process_images(images, self.image_processor, args).to('cuda', dtype=torch.float16)
+        clip_images, siglip_images, dino_images, layout_images, sg_images, image_sizes = \
+            process_images(images, self.image_processor, args)
+        clip_images = clip_images.to(device='cuda', dtype=torch.float16)
+        siglip_images = siglip_images.to(device='cuda', dtype=torch.float16)
+        dino_images = dino_images.to(device='cuda', dtype=torch.float16)
+        layout_images = layout_images.to(device='cuda', dtype=torch.float16)
+        sg_images = sg_images.to(device='cuda', dtype=torch.float16)
+        image_sizes = image_sizes.to(device='cuda', dtype=torch.long)
         prompt = prompt.replace('PLACEHOLDER', content)
+        print(images, prompt)
 
         input_ids = tokenizer_image_token(
             prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
         stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
         keywords = [stop_str]
         stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
-        # print(prompt, self.stop_str)
         with torch.inference_mode():
             output_ids = self.model.generate(
-                input_ids, images=image_tensor, stopping_criteria=[stopping_criteria], **self.kwargs)
-
-        output = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-        # print(output)
+                input_ids, clip_images=clip_images, siglip_images=siglip_images, dino_images=dino_images, layout_images=layout_images, sg_images=sg_images, image_sizes=image_sizes, stopping_criteria=[stopping_criteria], **self.kwargs)
+        output = self.tokenizer.batch_decode(output_ids)[0].strip()
+        print(output)
         return output
 
 
