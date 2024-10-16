@@ -60,10 +60,10 @@ class LLaVA(BaseModel):
         self.model = self.model.cuda()
         self.conv_mode = 'llava_v1'
 
-        kwargs_default = dict(do_sample=False, temperature=0, max_new_tokens=512, top_p=None, num_beams=1, use_cache=True) # noqa E501
+        kwargs_default = dict(do_sample=False, max_new_tokens=512, num_beams=1, use_cache=True) # noqa E501
         kwargs_default.update(kwargs)
         self.kwargs = kwargs_default
-        warnings.warn(f'Following kwargs received: {self.kwargs}, will use as generation config. ')
+        # warnings.warn(f'Following kwargs received: {self.kwargs}, will use as generation config. ')
 
     def use_custom_prompt(self, dataset):
         assert dataset is not None
@@ -108,7 +108,7 @@ class LLaVA(BaseModel):
             if item['type'] == 'text':
                 text += item['value']
             elif item['type'] == 'image':
-                text += ' <image> '
+                text += '<image>\n'
                 images.append(item['value'])
         return text, images
 
@@ -163,11 +163,13 @@ class LLaVA(BaseModel):
             prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).cuda()
         keywords = [self.stop_str]
         stopping_criteria = KeywordsStoppingCriteria(keywords, self.tokenizer, input_ids)
+        # print(prompt, self.stop_str)
         with torch.inference_mode():
             output_ids = self.model.generate(
                 input_ids, images=image_tensor, stopping_criteria=[stopping_criteria], **self.kwargs)
 
         output = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+        # print(output)
         return output
 
 
